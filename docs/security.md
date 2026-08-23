@@ -1,0 +1,51 @@
+# Security baseline
+
+Two decisions set the bar (23 Aug 2026):
+
+1. The dashboard will be **reachable publicly over a domain**.
+2. The server manager will **control** Docker, Proxmox (VMs/LXC) and systemd —
+   not just display them.
+
+It follows that anyone who signs in here can run code on the homelab. Docker
+socket access is root on the host, with no detour. A login bypass is therefore
+not a data leak, it is a host takeover. None of what follows is optional.
+
+## Required before the domain points here
+
+- [ ] Reverse proxy (Caddy) with HTTPS. The backend binds to `127.0.0.1`, never `0.0.0.0`.
+- [ ] `COOKIE_SECURE=true`, `SameSite=Lax`, `HttpOnly` (already in place)
+- [ ] `CORS_ORIGINS` set to the real domain. Never `*` together with cookies.
+- [ ] **TOTP as a second factor.** A password alone is not enough for a restart
+      button that is reachable from the internet.
+- [ ] Rate limiting on `/api/auth/login` — e.g. 5 attempts / 15 min per IP, plus
+      a per-account lockout. Failed attempts are already logged.
+- [ ] Security headers: `Content-Security-Policy`, `X-Content-Type-Options`,
+      `Referrer-Policy`, HSTS.
+
+## Rules for the `servers` module
+
+- **No request field ever ends up in a shell command.** No interpolation, no
+  `shell=True`. Only the Docker SDK, the Proxmox API, D-Bus.
+- **Allow-list, not deny-list.** Permitted actions are a fixed list (`start`,
+  `stop`, `restart`), never a string passed through.
+- **Targets are configured, not submitted.** Which hosts and containers can be
+  addressed lives in the configuration. The client picks from a list of ids, it
+  never names a host freely.
+- **Do not use the bare Docker socket.** Use a socket proxy with a restricted
+  endpoint set where possible. Otherwise any application bug is immediately
+  root.
+- **Proxmox tokens and SSH keys are secrets at rest.** Not in the database in
+  plain text, not in the repo, file mode 0600.
+- **Every write action gets logged**: who, what, which target, when, outcome.
+  That is the only chance of reconstructing afterwards what happened.
+- **Long running actions do not belong in the request path.** A job table in
+  SQLite plus a worker task. No external queue.
+- **Container ids are user input.** Check them against the configured target
+  list instead of handing them to Docker unchecked.
+
+## Operations
+
+- [ ] The backend runs as its own unprivileged user
+- [ ] Backups of `data/dashboard.db` — and a restore actually tested once.
+      An untested backup is a hypothesis, not a backup.
+- [ ] Dependencies pinned by lockfile, scanned (`pip-audit`, `npm audit`) in CI

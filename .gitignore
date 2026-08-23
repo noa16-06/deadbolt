@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.local
+
+# Data (SQLite database, uploads) — never belongs in the repo
+data/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

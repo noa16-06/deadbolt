@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Homelab Dashboard</title>
+    <meta name="color-scheme" content="dark" />
+    <!-- Inline SVG instead of a file: saves a request and the 404 in the console -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%231d2021'/><path d='M4 5h8M4 8h5M4 11h6' stroke='%23fe8019' stroke-width='1.6' stroke-linecap='round'/></svg>"
+    />
+    <style>
+      html, body, #root { margin: 0; min-height: 100%; background: #1d2021; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

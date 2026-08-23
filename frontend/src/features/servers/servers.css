@@ -1,0 +1,328 @@
+/* Server manager. Same Gruvbox palette as the planner, but a real CSS file
+   instead of an injected <style> — media queries are needed here just as
+   much, and Vite bundles it cleanly. */
+
+.sv {
+  --bg: #1d2021;
+  --bg-alt: #282828;
+  --bg-zeile: #242322;
+  --rand: #3c3836;
+  --rand-hell: #504945;
+  --schwach: #665c54;
+  --gedaempft: #a89984;
+  --text: #ebdbb2;
+  --gruen: #b8bb26;
+  --gelb: #fabd2f;
+  --blau: #83a598;
+  --orange: #fe8019;
+  --lila: #d3869b;
+  --aqua: #8ec07c;
+  --rot: #fb4934;
+
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.sv *, .sv *::before, .sv *::after { box-sizing: border-box; }
+
+/* ---------------------------------------------------------- sub tabs */
+.sv-tabs {
+  display: flex;
+  background: #242322;
+  border-bottom: 1px solid var(--rand);
+  padding: 0 6px;
+  overflow-x: auto;
+}
+.sv-tab {
+  font-family: inherit;
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--gedaempft);
+  font-size: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.sv-tab-active { color: var(--text); border-bottom-color: var(--orange); }
+.sv-tab-count {
+  font-size: 10px;
+  color: var(--schwach);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+
+.sv-content { flex: 1; min-height: 0; padding: 14px; overflow-y: auto; }
+
+.sv-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  color: var(--blau);
+  margin-bottom: 12px;
+}
+.sv-head-right { color: var(--gedaempft); font-size: 11px; }
+.sv-note {
+  font-size: 11px;
+  color: var(--gelb);
+  border: 1px dashed #665c54;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------- containers */
+.sv-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.sv-search {
+  font-family: inherit;
+  flex: 1 1 200px;
+  min-width: 0;
+  min-height: 48px;
+  background: var(--bg-zeile);
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 0 10px;
+}
+.sv-chip {
+  font-family: inherit;
+  min-height: 48px;
+  /* Short labels like "all" would otherwise fall under the 48px tap target */
+  min-width: 48px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid var(--rand-hell);
+  border-radius: 4px;
+  color: var(--gedaempft);
+  font-size: 11px;
+  cursor: pointer;
+}
+.sv-chip-active { border-color: var(--orange); color: var(--orange); }
+
+.sv-table { display: flex; flex-direction: column; gap: 4px; }
+/* Eight cells, in this DOM order:
+   name · image · state · uptime · cpu · ram · ports · actions */
+.sv-headrow,
+.sv-row {
+  display: grid;
+  grid-template-columns: 1.7fr 1.5fr 0.8fr 0.6fr 0.9fr 0.9fr 0.9fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  min-height: 56px;
+  border-radius: 4px;
+}
+.sv-headrow {
+  min-height: 32px;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: var(--schwach);
+  text-transform: uppercase;
+}
+.sv-row { background: var(--bg-zeile); }
+.sv-row:hover { background: #2a2928; }
+
+.sv-name { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.sv-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sv-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.sv-id { font-size: 10px; color: var(--schwach); }
+.sv-image, .sv-ports, .sv-cell {
+  font-size: 11px;
+  color: var(--gedaempft);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sv-state { font-size: 11px; white-space: nowrap; }
+.sv-stack {
+  font-size: 9px;
+  color: var(--schwach);
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* load bar inside the row */
+.sv-bar {
+  height: 4px;
+  background: var(--rand);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+.sv-bar > span { display: block; height: 100%; border-radius: 2px; }
+
+.sv-actions { display: flex; gap: 2px; justify-content: flex-end; }
+.sv-btn {
+  font-family: inherit;
+  min-width: 48px;
+  min-height: 48px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--gedaempft);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sv-btn:hover:not(:disabled) { background: #332f2c; color: var(--text); }
+.sv-btn:disabled { color: var(--schwach); cursor: not-allowed; }
+.sv-btn-danger:hover:not(:disabled) { color: var(--rot); }
+
+.sv-empty { color: var(--schwach); font-size: 12px; padding: 20px 0; text-align: center; }
+
+/* expandable logs */
+.sv-logs {
+  background: #191b1c;
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  margin: 2px 0 6px;
+  padding: 10px;
+  font-size: 11px;
+  color: var(--gedaempft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* ---------------------------------------------------------- metrics */
+.sv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.sv-card {
+  background: var(--bg-zeile);
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  padding: 14px;
+  min-width: 0;
+}
+.sv-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sv-card-title { font-size: 11px; color: var(--blau); letter-spacing: 0.5px; }
+.sv-card-sub {
+  font-size: 10px;
+  color: var(--schwach);
+  margin-bottom: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sv-big { font-size: 26px; line-height: 1; }
+.sv-unit { font-size: 12px; color: var(--gedaempft); }
+
+.sv-spark { display: block; width: 100%; height: 44px; margin: 10px 0 4px; }
+
+/* align-items: stretch + height:100% are required here: the track only
+   contains an absolutely positioned child, so it would otherwise be 0 tall. */
+.sv-cores { display: flex; gap: 3px; align-items: stretch; height: 34px; margin-top: 10px; }
+.sv-core {
+  flex: 1;
+  height: 100%;
+  background: var(--rand);
+  border-radius: 2px 2px 0 0;
+  position: relative;
+  overflow: hidden;
+}
+.sv-core > span { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 2px 2px 0 0; }
+
+.sv-values { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.sv-value-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--gedaempft); gap: 8px; }
+.sv-value-row b { color: var(--text); font-weight: 400; }
+
+/* ---------------------------------------------------------- terminal */
+.sv-term-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.sv-term-target { font-size: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sv-term-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sv-term-btn {
+  font-family: inherit;
+  min-height: 48px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid var(--rand-hell);
+  border-radius: 4px;
+  color: var(--gedaempft);
+  font-size: 11px;
+  cursor: pointer;
+}
+.sv-term-btn:hover { color: var(--text); border-color: var(--gedaempft); }
+.sv-term-frame {
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  background: #161819;
+  padding: 8px;
+  height: min(58vh, 520px);
+  min-height: 260px;
+}
+.sv-term-frame .xterm { height: 100%; }
+
+/* ---------------------------------------------------------- phone */
+@media (max-width: 860px) {
+  /* The table becomes a card list — seven columns at 375px are no longer a
+     table, they are confetti. */
+  .sv-headrow { display: none; }
+  .sv-row {
+    grid-template-columns: 1fr 1fr auto;
+    grid-template-areas:
+      "name    name  aktionen"
+      "image   image aktionen"
+      "zustand zeit  aktionen"
+      "cpu     ram   aktionen"
+      "ports   ports aktionen";
+    align-items: center;
+    row-gap: 6px;
+    padding: 10px;
+    min-height: 0;
+  }
+  .sv-z-name { grid-area: name; }
+  .sv-z-image { grid-area: image; }
+  .sv-z-state { grid-area: zustand; }
+  .sv-z-uptime { grid-area: zeit; }
+  .sv-z-cpu { grid-area: cpu; }
+  .sv-z-ram { grid-area: ram; }
+  .sv-z-ports { grid-area: ports; }
+  .sv-z-actions { grid-area: aktionen; align-self: center; }
+  .sv-actions { flex-direction: column; }
+  .sv-cell, .sv-ports, .sv-image { white-space: normal; overflow-wrap: anywhere; }
+  .sv-content { padding: 10px; }
+  .sv-grid { grid-template-columns: 1fr; }
+}

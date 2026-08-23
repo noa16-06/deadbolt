@@ -1,0 +1,29 @@
+# Web-Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Datenbank
+sqlalchemy>=2.0.36
+aiosqlite>=0.20.0
+# SQLAlchemy braucht greenlet fuer den async-Modus — auf Python 3.14 nicht automatisch dabei
+greenlet>=3.2.0
+alembic>=1.14.0
+
+# Auth
+argon2-cffi>=23.1.0
+itsdangerous>=2.2.0
+
+# Server-Manager
+# Docker nur ueber das SDK — kein subprocess, kein shell=True
+docker>=7.1.0
+psutil>=6.1.0
+
+# Sonstiges
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.0
+
+# Tests
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
+httpx>=0.27.0

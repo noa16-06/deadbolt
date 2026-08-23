@@ -1,0 +1,102 @@
+/* Shared shell for every section: one header, one nav, the section below.
+   The content fills the remaining height. */
+
+.shell {
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: #1d2021;
+  color: #ebdbb2;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.shell *, .shell *::before, .shell *::after { box-sizing: border-box; }
+
+.shell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 8px 14px;
+  background: #282828;
+  border-bottom: 1px solid #3c3836;
+  font-size: 12px;
+}
+.shell-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.shell-prompt { color: #b8bb26; }
+.shell-title { color: #fe8019; letter-spacing: 1px; font-weight: 600; }
+
+.shell-nav { display: flex; gap: 4px; }
+.shell-nav-link {
+  font-family: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #a89984;
+  font-size: 12px;
+}
+.shell-nav-link:hover { color: #ebdbb2; }
+.shell-nav-active {
+  color: #ebdbb2;
+  border-color: #504945;
+  background: #1d2021;
+}
+
+.shell-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: #a89984;
+}
+.shell-sep { color: #504945; }
+.shell-user { color: #83a598; }
+
+/* Visually 32px, 48px hit area via ::after — otherwise the button inflates
+   the header. The ::after is absolute and does not affect layout. */
+.shell-logout {
+  position: relative;
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid #504945;
+  border-radius: 3px;
+  color: #a89984;
+  font-size: 10px;
+  padding: 0 10px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.shell-logout::after {
+  content: " ";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+}
+.shell-nav-link::after {
+  content: " ";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+}
+.shell-nav-link { position: relative; }
+
+.shell-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.shell-app :focus-visible,
+.shell :focus-visible { outline: 2px solid #fe8019; outline-offset: 1px; }
+
+@media (max-width: 720px) {
+  .shell-header { gap: 8px; }
+  .shell-nav { width: 100%; }
+  .shell-nav-link { flex: 1 1 0; justify-content: center; }
+}
