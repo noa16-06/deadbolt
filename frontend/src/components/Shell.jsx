@@ -52,13 +52,21 @@ export default function Shell({ user, onSignOut, children }) {
             <>
               <span className="shell-sep">|</span>
               <span className="shell-user">{user.username}</span>
-              <button className="shell-logout" onClick={onSignOut}>
-                sign out
-              </button>
+              {onSignOut && (
+                <button className="shell-logout" onClick={onSignOut}>
+                  sign out
+                </button>
+              )}
             </>
           )}
         </div>
       </header>
+
+      {user?.authDisabled && (
+        <div className="shell-warning">
+          AUTH_DISABLED — no sign-in required. Local development only.
+        </div>
+      )}
 
       <main className="shell-content">{children}</main>
     </div>

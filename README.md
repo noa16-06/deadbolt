@@ -98,12 +98,34 @@ metrics and logs come from the real backend against Docker and psutil.
 access waits for TOTP — a restart button reachable from the internet behind a
 single password is the case `docs/security.md` argues against.
 
+**Currently switched off for development:** `AUTH_DISABLED=true` in `.env` —
+no sign-in, every request runs as the `dev` user, and a red banner says so. The
+backend refuses to start if that flag meets `COOKIE_SECURE=true`, a non-loopback
+`HOST`, or a remote CORS origin. Set it to `false` before the domain points here.
+
+**Two-factor and rate limiting are in place.** Enrol with
+`python backend/scripts/enable_totp.py` — QR code in the terminal, ten one-time
+recovery codes. The login takes 5 failed attempts per IP and 10 per account per
+15 minutes; a success clears the record. Behind Caddy, `TRUST_PROXY_HEADER=true`
+is required or everyone shares one bucket.
+
 **Open:**
 
-- TOTP and login rate limiting, both required before the domain points here
 - the write half of `servers`: actions, audit log, terminal WebSocket
 - the Proxmox and systemd drivers — only Docker exists so far
-- planner tests still need fixtures; `test_servers_docker.py` runs (18 cases)
+- reverse proxy, security headers, backups (see `docs/security.md`)
+
+## Tests
+
+```bash
+cd backend && python -m pytest
+```
+
+42 of them, all running — no placeholders left. `tests/conftest.py` builds an
+in-memory database per test and two separately signed-in clients, which is what
+the planner authorization tests needed. Covered: can user A reach user B's data,
+does a password alone still get in once TOTP is on, does a recovery code work
+exactly once, does guessing get blocked, and the Docker payload parsing.
 
 ## Security
 

@@ -1,9 +1,20 @@
 import { useState } from "react";
 import { MONO, colors } from "../../theme/colors.js";
 
+// The backend answers a wrong password and a missing code with the same 401,
+// so the form cannot know whether a second factor is expected. It shows the
+// field either way, empty and optional — for an account without TOTP it is
+// simply ignored. Anything smarter would need the backend to admit that the
+// password was right, and that is half the secret.
+function waitMessage(seconds) {
+  const minutes = Math.ceil((seconds || 900) / 60);
+  return `Too many attempts. Try again in about ${minutes} min.`;
+}
+
 export default function Login({ onSignIn }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -13,14 +24,19 @@ export default function Login({ onSignIn }) {
     setBusy(true);
     setError(null);
     try {
-      await onSignIn(username, password);
+      await onSignIn(username, password, code.trim() || null);
     } catch (err) {
-      // Deliberately the same message for a wrong user and a wrong password —
-      // otherwise the form reveals which usernames exist.
-      setError(
-        err.status === 401 ? "Wrong username or password" : "Server unreachable"
-      );
+      if (err.status === 429) {
+        setError(waitMessage(err.retryAfter));
+      } else if (err.status === 401) {
+        // Deliberately one message for a wrong user, a wrong password and a
+        // wrong code — otherwise the form reveals which part was right.
+        setError("Wrong username, password or code");
+      } else {
+        setError("Server unreachable");
+      }
       setPassword("");
+      setCode("");
     } finally {
       setBusy(false);
     }
@@ -53,6 +69,18 @@ export default function Login({ onSignIn }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
+          />
+        </label>
+
+        <label style={S.label}>
+          2fa code <span style={S.hint}>— empty if not enabled</span>
+          <input
+            style={S.input}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            placeholder="000000"
           />
         </label>
 
@@ -123,5 +151,6 @@ const S = {
     cursor: "pointer",
     marginTop: 4,
   },
+  hint: { color: colors.textMuted, opacity: 0.65 },
   error: { color: colors.red, fontSize: 11, minHeight: 14, textAlign: "center" },
 };

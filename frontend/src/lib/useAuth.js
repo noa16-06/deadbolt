@@ -19,8 +19,8 @@ export function useAuth() {
     };
   }, []);
 
-  const signIn = useCallback(async (username, password) => {
-    const u = await api.post("/auth/login", { username, password });
+  const signIn = useCallback(async (username, password, code) => {
+    const u = await api.post("/auth/login", { username, password, code });
     setUser(u);
     return u;
   }, []);

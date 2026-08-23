@@ -32,6 +32,31 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
+    # ------------------------------------------------------------ login limit
+    # 5 attempts per IP per window, plus a per-account lock so a botnet cannot
+    # spread the guessing across addresses. Only failures count; a success
+    # clears the record.
+    login_max_per_ip: int = 5
+    login_max_per_account: int = 10
+    login_window_minutes: int = 15
+
+    # Take the client IP from X-Forwarded-For instead of the socket.
+    #
+    # ONLY with a reverse proxy in front that overwrites the header. Without
+    # one, anyone can set it and the rate limit becomes decoration. Left off,
+    # every request behind a proxy looks like it comes from 127.0.0.1 and
+    # shares one bucket — so this has to be switched on together with Caddy.
+    trust_proxy_header: bool = False
+
+    # ------------------------------------------------------------ development
+    # Skips the login entirely: every request runs as the first user in the
+    # database. For local work, so the login form is not in the way.
+    #
+    # Never true anywhere reachable. `_check_dev_switches` below refuses to
+    # start if this is combined with settings that look like production — a
+    # forgotten flag here is a host takeover, not an inconvenience.
+    auth_disabled: bool = False
+
     # ---------------------------------------------------------- server manager
     # Deliberately NOT the bare socket: whoever reaches /var/run/docker.sock is
     # root on the host, past everything the backend is otherwise allowed to do.
@@ -82,10 +107,53 @@ class Settings(BaseSettings):
         return f"{prefix}:///{target}"
 
 
+def _check_dev_switches(settings: "Settings") -> None:
+    """Refuse to start when AUTH_DISABLED meets a production-looking setup.
+
+    The point is not to be clever about detecting production. It is that the
+    one switch which turns a login into no login must be impossible to leave
+    on by accident.
+    """
+    if not settings.auth_disabled:
+        return
+
+    reasons = []
+    if settings.cookie_secure:
+        reasons.append("COOKIE_SECURE=true (so this is served over HTTPS)")
+    if settings.host not in ("127.0.0.1", "localhost", "::1"):
+        reasons.append(f"HOST={settings.host} (not loopback — reachable from outside)")
+    remote = [
+        o
+        for o in settings.cors_origin_list
+        if "localhost" not in o and "127.0.0.1" not in o
+    ]
+    if remote:
+        reasons.append(f"CORS_ORIGINS points at {', '.join(remote)}")
+
+    if not reasons:
+        return
+
+    raise SystemExit(
+        "\n".join(
+            [
+                "",
+                "  AUTH_DISABLED=true together with a production-looking setup:",
+                *(f"    - {r}" for r in reasons),
+                "",
+                "  That combination is a login bypass on a reachable host.",
+                "  Set AUTH_DISABLED=false in .env, or undo the settings above.",
+                "",
+            ]
+        )
+    )
+
+
 def _load() -> Settings:
     """On a failed start, say what to do instead of dumping a traceback."""
     try:
-        return Settings()  # type: ignore[call-arg]
+        settings = Settings()  # type: ignore[call-arg]
+        _check_dev_switches(settings)
+        return settings
     except ValidationError as error:
         missing = [
             ".".join(str(t) for t in f["loc"])

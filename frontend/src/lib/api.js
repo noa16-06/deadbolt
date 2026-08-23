@@ -18,12 +18,12 @@ async function request(path, options = {}) {
       },
     });
 
-    if (response.status === 401) {
-      throw new ApiError("Not signed in", 401);
-    }
     if (!response.ok) {
+      // The body is read for 401 too: the sign-in form needs the actual
+      // reason, while everything else just cares that it was a 401.
       const body = await response.json().catch(() => ({}));
-      throw new ApiError(body.detail || "Request failed", response.status);
+      const fallback = response.status === 401 ? "Not signed in" : "Request failed";
+      throw new ApiError(body.detail || fallback, response.status, response);
     }
     return response.status === 204 ? null : response.json();
   } finally {
@@ -32,9 +32,11 @@ async function request(path, options = {}) {
 }
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, response) {
     super(message);
     this.status = status;
+    // Rate limiting answers with Retry-After; the form turns it into a wait.
+    this.retryAfter = Number(response?.headers?.get("retry-after")) || null;
   }
 }
 

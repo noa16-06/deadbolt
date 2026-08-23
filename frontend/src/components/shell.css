@@ -100,3 +100,15 @@
   .shell-nav { width: 100%; }
   .shell-nav-link { flex: 1 1 0; justify-content: center; }
 }
+
+/* Impossible to miss on purpose: the one state where anyone who reaches the
+   page is signed in. */
+.shell-warning {
+  background: #fb4934;
+  color: #161819;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 5px 12px;
+}

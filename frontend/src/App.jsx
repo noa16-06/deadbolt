@@ -22,7 +22,13 @@ export default function App() {
     <BrowserRouter>
       {/* key={user.id}: after a user switch everything reloads instead of
           showing the previous user's data. */}
-      <Shell key={user.id} user={user} onSignOut={signOut}>
+      {/* No sign-out while the login is switched off — it would drop into a
+          form that nothing checks and that a reload walks straight past. */}
+      <Shell
+        key={user.id}
+        user={user}
+        onSignOut={user.authDisabled ? null : signOut}
+      >
         <Routes>
           <Route path="/planner" element={<DayPlan onSessionLost={sessionLost} />} />
           <Route path="/servers" element={<ServerManager onSessionLost={sessionLost} />} />

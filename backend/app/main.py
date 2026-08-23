@@ -27,6 +27,12 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.auth_disabled:
+        # Loud, every single start. A quiet bypass is how it stays on.
+        log.warning("=" * 62)
+        log.warning("AUTH_DISABLED=true — every request runs as the first user.")
+        log.warning("Local development only. Set it to false before the domain.")
+        log.warning("=" * 62)
     # The server manager samples in the background so no request has to wait a
     # second for a CPU delta. See app/modules/servers/sampler.py.
     sampler.start()

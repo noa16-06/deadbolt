@@ -7,8 +7,9 @@ from datetime import date
 
 import pytest
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.skip(reason="Fixtures (test database, two signed-in clients) still missing")
+
 async def test_foreign_block_is_unreachable(client_a, client_b):
     response = await client_a.post(
         "/api/planner/blocks",
@@ -29,7 +30,6 @@ async def test_foreign_block_is_unreachable(client_a, client_b):
     ).status_code == 404
 
 
-@pytest.mark.skip(reason="Fixtures still missing")
 async def test_completion_is_bound_to_one_day(client_a):
     """Ticking something off today must not tick it off tomorrow.
 

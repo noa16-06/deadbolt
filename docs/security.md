@@ -15,10 +15,17 @@ not a data leak, it is a host takeover. None of what follows is optional.
 - [ ] Reverse proxy (Caddy) with HTTPS. The backend binds to `127.0.0.1`, never `0.0.0.0`.
 - [ ] `COOKIE_SECURE=true`, `SameSite=Lax`, `HttpOnly` (already in place)
 - [ ] `CORS_ORIGINS` set to the real domain. Never `*` together with cookies.
-- [ ] **TOTP as a second factor.** A password alone is not enough for a restart
-      button that is reachable from the internet.
-- [ ] Rate limiting on `/api/auth/login` — e.g. 5 attempts / 15 min per IP, plus
-      a per-account lockout. Failed attempts are already logged.
+- [x] **TOTP as a second factor.** Built. Enrol with
+      `python backend/scripts/enable_totp.py` (QR code in the terminal, ten
+      one-time recovery codes). The secret is stored encrypted with a key
+      derived from SECRET_KEY, so a leaked database copy alone does not hand
+      over the second factor. Note: rotating SECRET_KEY forces re-enrolment.
+- [x] Rate limiting on `/api/auth/login`. Built: 5 failed attempts per IP and
+      10 per account within 15 minutes, both configurable. Only failures count
+      and a success clears the record. **Behind Caddy, set
+      `TRUST_PROXY_HEADER=true`** — otherwise every request appears to come
+      from 127.0.0.1 and everyone shares one bucket. Never set it without a
+      proxy that overwrites the header, or the limit is decoration.
 - [ ] Security headers: `Content-Security-Policy`, `X-Content-Type-Options`,
       `Referrer-Policy`, HSTS.
 
