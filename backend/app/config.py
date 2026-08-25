@@ -74,10 +74,20 @@ class Settings(BaseSettings):
     # Mount points for the disk display. Empty: detect physical partitions.
     servers_disks: str = ""
 
-    # Which containers may later be CONTROLLED (phase: write access). Empty
-    # means nothing may be controlled — the list only ever grows deliberately.
-    # Reading is unaffected: the list shows everything.
+    # Which containers may be CONTROLLED — started, stopped, restarted, and
+    # created under that name. Empty means nothing may be controlled: the list
+    # only ever grows deliberately. Reading is unaffected: the list shows
+    # everything.
     servers_control_allowlist: str = ""
+
+    # Which IMAGES a container may be created from. Empty means nothing may be
+    # created, and for a harder reason than the list above: an image is code
+    # that runs on this host, so "any image" reads as "any code, as root".
+    #
+    # Entries are exact `repository:tag` strings. A bare `nginx` matches
+    # nothing on purpose — the tag decides which code runs, so leaving it out
+    # would turn one allowed image into every future version of it.
+    servers_image_allowlist: str = ""
 
     @property
     def disk_list(self) -> list[str]:
@@ -86,6 +96,10 @@ class Settings(BaseSettings):
     @property
     def control_allowlist(self) -> set[str]:
         return {n.strip() for n in self.servers_control_allowlist.split(",") if n.strip()}
+
+    @property
+    def image_allowlist(self) -> set[str]:
+        return {i.strip() for i in self.servers_image_allowlist.split(",") if i.strip()}
 
     @property
     def cors_origin_list(self) -> list[str]:

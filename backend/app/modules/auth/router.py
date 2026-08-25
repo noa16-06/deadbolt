@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.config import settings
-from app.deps import CurrentUser, DbSession
+from app.deps import CurrentUser, DbSession, client_ip
 from app.modules.auth import service
 from app.modules.auth.schemas import (
     LoginInput,
@@ -26,24 +26,6 @@ from app.security import (
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-
-def client_ip(request: Request) -> str:
-    """The address the rate limit counts against.
-
-    Behind a reverse proxy the socket always shows the proxy, so every visitor
-    would share one bucket and lock each other out. X-Forwarded-For fixes that
-    — but only when something in front actually overwrites the header. Without
-    a proxy anyone can set it themselves, which is why this is off by default
-    and belongs switched on together with Caddy.
-    """
-    if settings.trust_proxy_header:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        if forwarded:
-            # The last entry is the one the trusted proxy appended; earlier
-            # ones are whatever the client claimed.
-            return forwarded.split(",")[-1].strip()
-    return request.client.host if request.client else "unknown"
 
 
 @router.post("/login", response_model=UserOut)

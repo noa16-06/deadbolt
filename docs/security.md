@@ -34,13 +34,29 @@ not a data leak, it is a host takeover. None of what follows is optional.
 - **No request field ever ends up in a shell command.** No interpolation, no
   `shell=True`. Only the Docker SDK, the Proxmox API, D-Bus.
 - **Allow-list, not deny-list.** Permitted actions are a fixed list (`start`,
-  `stop`, `restart`), never a string passed through.
+  `stop`, `restart`), never a string passed through. Creating a container is
+  the fourth write action and needs two lists at once: the NAME on
+  `SERVERS_CONTROL_ALLOWLIST` (a container that may be created but not stopped
+  is one nobody can switch off again) and the IMAGE on
+  `SERVERS_IMAGE_ALLOWLIST`, tag included. Both fail closed.
+- **A create specifies, it does not command.** The body holds a name, an image,
+  published ports and environment variables — nothing else. Volumes,
+  `privileged`, host network, devices, capabilities, user, entrypoint and
+  command are not fields that are validated, they are fields that do not exist:
+  each one turns "create a container" into "run anything as root on the host".
+  The safe values are pinned in the driver (`_HARDENING`) where a request cannot
+  reach them.
+- **The dashboard does not pull images.** A pull fetches code over the network
+  and takes as long as it takes — that is a long running action, and it belongs
+  on the host. A missing image is a 409 that says so.
 - **Targets are configured, not submitted.** Which hosts and containers can be
   addressed lives in the configuration. The client picks from a list of ids, it
   never names a host freely.
 - **Do not use the bare Docker socket.** Use a socket proxy with a restricted
   endpoint set where possible. Otherwise any application bug is immediately
-  root.
+  root. Creating needs `POST /containers/create` and `POST /containers/{id}/start`
+  open on that proxy — leave them closed and the rest of the module still works,
+  which is the cheapest way to switch the create half off entirely.
 - **Proxmox tokens and SSH keys are secrets at rest.** Not in the database in
   plain text, not in the repo, file mode 0600.
 - **Every write action gets logged**: who, what, which target, when, outcome.

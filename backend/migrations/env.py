@@ -14,6 +14,7 @@ from app.db import Base
 # Import every model so that Base.metadata is complete.
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.planner import models as _planner_models  # noqa: F401
+from app.modules.servers import models as _servers_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

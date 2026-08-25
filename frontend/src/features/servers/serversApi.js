@@ -8,11 +8,13 @@ import { api } from "../../lib/api.js";
 // Reading is live: the backend serves containers, metrics and logs.
 export const MOCK = false;
 
-// Writing is not. There is deliberately no action endpoint yet — start / stop /
-// restart reachable from the internet needs TOTP and the login rate limit
-// first (docs/security.md). The UI shows the buttons disabled rather than
-// firing requests at a route that is missing on purpose.
-export const WRITE_ENABLED = false;
+// Writing is live too now: start / stop / restart and creating a container.
+// It waited for TOTP and the login rate limit (docs/security.md), and it is
+// narrower than the switch suggests — the backend only touches containers on
+// SERVERS_CONTROL_ALLOWLIST, and only creates from images on
+// SERVERS_IMAGE_ALLOWLIST. Which is why the row carries `controllable`: the
+// buttons for everything else stay dead instead of firing off a 403.
+export const WRITE_ENABLED = true;
 
 // The terminal has no backend at all yet, so the stand-in shell keeps running.
 export const MOCK_TERMINAL = true;
@@ -195,6 +197,26 @@ export const serversApi = {
       return { id: containerId, action, ok: true };
     }
     return api.post(`/servers/containers/${containerId}/action`, { action });
+  },
+
+  // The four fields the backend accepts, and no more. Volumes, `privileged`,
+  // the network mode and a command are not "not implemented here" — they do
+  // not exist in the API, because each one turns creating a container into
+  // running anything as root on the host.
+  async createContainer(spec) {
+    if (!WRITE_ENABLED) {
+      throw new Error("Write access is not enabled yet.");
+    }
+    if (MOCK) {
+      await wait(700);
+      return { id: "0123456789ab", name: spec.name, image: spec.image, state: "running" };
+    }
+    return api.post("/servers/containers", {
+      name: spec.name,
+      image: spec.image,
+      ports: spec.ports ?? [],
+      env: spec.env ?? {},
+    });
   },
 
   async logs(containerId, lines = 200) {

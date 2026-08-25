@@ -74,6 +74,33 @@ session cookie works without CORS special cases.
 On first sign-in the backend creates a default weekly plan
 (`app/modules/planner/default_plan.py`).
 
+## What the server manager may touch
+
+Reading is unrestricted behind the login: the list shows every container on the
+host, running or not. Writing is not, and it takes two configured lists plus a
+second factor:
+
+```ini
+# start / stop / restart, and the names a new container may be created under
+SERVERS_CONTROL_ALLOWLIST=media-server,paperless
+# the images it may be created from, tag included
+SERVERS_IMAGE_ALLOWLIST=paperless:2.11,nginx:1.27
+```
+
+Both are empty by default, and empty allows nothing. The account also needs
+TOTP — a password alone stays read-only, because a guessed password would
+otherwise be root on the host (`docs/security.md`).
+
+Creating takes a name, an image, published ports (host port 1024 and above) and
+environment variables. It does not take volumes, `privileged`, a network mode or
+a command: those are not narrow options, they are the difference between
+starting a container and running anything on the host, so the dashboard pins
+them instead of offering them. The image has to be on the host already — the
+dashboard does not pull.
+
+Every write attempt, refused ones included, is one row in `servers_control_log`:
+who, what, which target, when, and why it failed.
+
 ## How the planner handles "done"
 
 The plan is a **weekday template**: "Monday" is a recurring shape, not one

@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import { ACTIONS, STATES, WRITE_ENABLED, serversApi } from "./serversApi.js";
 
-// Why the buttons are dead, on hover — better than a click that does nothing.
-const OFF_HINT = "write access is off until TOTP is in place";
+// Why a button is dead, on hover — better than a click that does nothing.
+const OFF_HINT = "write access is off in this build";
+// The backend sends `controllable` per row and refuses everything else with a
+// 403. Greying those buttons out says the same thing without the round trip.
+const LOCKED_HINT = "not on SERVERS_CONTROL_ALLOWLIST";
 
 const FILTERS = [
   { key: "all", label: "all" },
@@ -132,6 +135,8 @@ export default function ContainerList({ containers, loading, error, onAction, on
           const ramPercent = c.ram.limit ? (c.ram.used / c.ram.limit) * 100 : 0;
           const running = busy[c.id];
           const stopped = c.state === "exited";
+          const locked = !WRITE_ENABLED || !c.controllable;
+          const lockHint = WRITE_ENABLED ? LOCKED_HINT : OFF_HINT;
 
           return (
             <div key={c.id}>
@@ -188,8 +193,8 @@ export default function ContainerList({ containers, loading, error, onAction, on
                   <button
                     className="sv-btn"
                     onClick={() => run(c, stopped ? "start" : "stop")}
-                    disabled={!WRITE_ENABLED || !!running}
-                    title={WRITE_ENABLED ? (stopped ? "start" : "stop") : OFF_HINT}
+                    disabled={locked || !!running}
+                    title={locked ? lockHint : stopped ? "start" : "stop"}
                     aria-label={stopped ? "start" : "stop"}
                   >
                     {stopped ? "▶" : "■"}
@@ -197,8 +202,8 @@ export default function ContainerList({ containers, loading, error, onAction, on
                   <button
                     className="sv-btn"
                     onClick={() => run(c, "restart")}
-                    disabled={!WRITE_ENABLED || !!running || stopped}
-                    title={WRITE_ENABLED ? "restart" : OFF_HINT}
+                    disabled={locked || !!running || stopped}
+                    title={locked ? lockHint : "restart"}
                     aria-label="restart"
                   >
                     ↻

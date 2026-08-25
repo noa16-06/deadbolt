@@ -85,6 +85,61 @@
   line-height: 1.5;
 }
 
+/* ---------------------------------------------------------- create form */
+/* Collapsed, the form is a single chip in the flow above the filter row —
+   creating a container is a rare action and should not sit in the way of the
+   list, which is what this tab is for. */
+.sv-create-open { margin-bottom: 12px; }
+
+.sv-create {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--rand-hell);
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--bg-zeile);
+}
+.sv-create-head { font-size: 11px; color: var(--orange); letter-spacing: 0.5px; }
+
+/* Label above the field, not beside it: at 360px a two column form turns the
+   inputs into slots too narrow for an image name. */
+.sv-field { display: flex; flex-direction: column; gap: 4px; }
+.sv-field-label { font-size: 11px; color: var(--gedaempft); }
+.sv-input {
+  font-family: inherit;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  background: var(--bg);
+  border: 1px solid var(--rand);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 0 10px;
+}
+.sv-input:focus { outline: none; border-color: var(--orange); }
+.sv-input::placeholder { color: var(--schwach); }
+.sv-textarea { padding: 10px; line-height: 1.5; resize: vertical; }
+
+.sv-field-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--gedaempft);
+}
+.sv-field-hint code { color: var(--blau); }
+
+.sv-create-error {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--rot);
+  border-left: 2px solid var(--rot);
+  padding-left: 8px;
+}
+.sv-create-actions { display: flex; gap: 8px; }
+
 /* ---------------------------------------------------------- containers */
 .sv-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .sv-search {

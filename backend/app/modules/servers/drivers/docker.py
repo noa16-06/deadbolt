@@ -1,8 +1,18 @@
-"""Docker driver — reading only, for now.
+"""Docker driver — reads container state, and performs the write actions.
+
+Writing is `start`, `stop`, `restart` on an existing container, and creating a
+new one from an image. Creating is the widest of the four by far — an image is
+code that runs on this host — so the specification that reaches the SDK is
+narrow on purpose: a name, an image, published ports, environment variables.
+Everything that would make a container powerful (volumes, `privileged`, host
+network, devices, capabilities) is pinned in `_HARDENING` and cannot be
+reached from a request at all.
 
 Talks to the Docker API exclusively through the SDK. No `subprocess`, no
 `shell=True`, no string interpolation: there is no place here where a request
-field could turn into a command.
+field could turn into a command. The action is dispatched through explicit
+branches rather than `getattr(container, action)`, so a request field can never
+select a method either.
 
 The SDK is synchronous, so every call goes through `asyncio.to_thread`. One
 client is shared, guarded by a lock, because the `requests.Session` underneath
@@ -18,11 +28,22 @@ from datetime import datetime, timezone
 from typing import Any
 
 import docker
-from docker.errors import DockerException
+from docker.errors import APIError, DockerException, ImageNotFound, NotFound
 
 from app.config import settings
-from app.modules.servers.drivers.base import DriverUnavailable
-from app.modules.servers.schemas import Action, ContainerOut, Memory, Port, State
+from app.modules.servers.drivers.base import (
+    DriverUnavailable,
+    TargetConflict,
+    UnknownTarget,
+)
+from app.modules.servers.schemas import (
+    Action,
+    ContainerOut,
+    CreateIn,
+    Memory,
+    Port,
+    State,
+)
 
 log = logging.getLogger(__name__)
 
@@ -157,6 +178,16 @@ def _memory(stats: dict[str, Any]) -> Memory:
     )
 
 
+def _stop_timeout() -> int:
+    """Seconds Docker waits after SIGTERM before it sends SIGKILL.
+
+    Has to stay below the client timeout: the API call blocks for the whole
+    grace period, so a stop timeout at or above `DOCKER_TIMEOUT` would abort
+    the very request that is doing the stopping.
+    """
+    return max(1, settings.docker_timeout - 2)
+
+
 # ------------------------------------------------------------------ blocking
 def _read_containers() -> list[dict[str, Any]]:
     with _lock:
@@ -173,6 +204,91 @@ def _read_logs(container_id: str, lines: int) -> bytes:
         return _connect().api.logs(
             container_id, stdout=True, stderr=True, tail=lines, timestamps=True
         )
+
+
+def _read_attrs(container_id: str) -> dict[str, Any]:
+    with _lock:
+        return _connect().containers.get(container_id).attrs
+
+
+# Fixed for every container this dashboard creates, and not reachable from a
+# request. Whatever the caller sends, it lands in `name`, `image`, `ports` and
+# `environment` — never in one of these.
+#
+# `no-new-privileges` stops a setuid binary inside the image from gaining
+# anything back, `network_mode` keeps the container off the host network stack,
+# and passing no `volumes` and no `devices` at all means nothing of the host
+# filesystem is visible from inside. `privileged=False` is Docker's default and
+# stands here to be read: the whole point of this call is what it does not do.
+_HARDENING: dict[str, Any] = {
+    "privileged": False,
+    "network_mode": "bridge",
+    "security_opt": ["no-new-privileges:true"],
+    "publish_all_ports": False,
+    # Restarts with the daemon — a container created here is meant to stay,
+    # and `unless-stopped` still respects a stop pressed in the dashboard.
+    "restart_policy": {"Name": "unless-stopped"},
+}
+
+# Marks what this dashboard created, so it can be told apart from what compose
+# or the CLI put on the host — the containers where a `docker rm` costs someone
+# their config file.
+CREATED_LABEL = "homelab.dashboard.created-by"
+
+
+def _create(spec: CreateIn, created_by: str) -> str:
+    """Create the container, then start it. Returns the new id.
+
+    `containers.create` is used rather than `containers.run`, and that is the
+    security-relevant half of this function: `run` pulls the image when it is
+    missing, which fetches and executes code from a registry inside a request.
+    `create` raises instead, and the service turns that into a 409 that says to
+    pull it on the host first.
+
+    Ports go through the SDK as a mapping of ints, the environment as a dict —
+    no string is assembled here that Docker then has to take apart again.
+    """
+    with _lock:
+        container = _connect().containers.create(
+            spec.image,
+            name=spec.name,
+            environment=dict(spec.env),
+            ports={f"{p.container}/{p.protocol}": p.host for p in spec.ports},
+            labels={CREATED_LABEL: created_by[:64]},
+            **_HARDENING,
+        )
+        try:
+            container.start()
+        except DockerException as error:
+            # The container exists from here on and it stays: removing it would
+            # delete the evidence of why it did not come up, and it shows in the
+            # list as `exited`, where the start button can try again. The
+            # message says so, because the audit log row is written from it.
+            raise DriverUnavailable(
+                f"{spec.name} was created but did not start: {error}"
+            ) from error
+        return container.id
+
+
+def _apply(container_id: str, action: Action) -> None:
+    """The write half. Three branches, written out.
+
+    Deliberately not `getattr(container, action)()`: that would let a request
+    field pick a method on a Docker object, and the list of methods there is a
+    lot longer than three. The `else` is unreachable through the API — pydantic
+    rejects anything else at the boundary — and stays as the guard for a future
+    caller that skips it.
+    """
+    with _lock:
+        container = _connect().containers.get(container_id)
+        if action == "start":
+            container.start()
+        elif action == "stop":
+            container.stop(timeout=_stop_timeout())
+        elif action == "restart":
+            container.restart(timeout=_stop_timeout())
+        else:
+            raise ValueError(f"Unknown action: {action!r}")
 
 
 # ------------------------------------------------------------------ driver
@@ -218,9 +334,66 @@ class DockerDriver:
         return sorted(containers, key=lambda c: c.name)
 
     async def action(self, target_id: str, action: Action) -> None:
-        raise NotImplementedError(
-            "Write access comes after TOTP and rate limiting — see docs/security.md"
-        )
+        """Start, stop or restart one container.
+
+        Whether this container may be controlled at all is not decided here —
+        `service.container_action` checks the allow-list first. The driver is
+        the last layer and does what it is told, which is why nothing above it
+        may hand it an unchecked id.
+        """
+        try:
+            await asyncio.to_thread(_apply, target_id, action)
+        except NotFound as error:
+            raise UnknownTarget(target_id) from error
+        except DockerException as error:
+            log.warning("Docker action %s on %s failed: %s", action, target_id, error)
+            raise DriverUnavailable(str(error)) from error
+
+    async def create(self, spec: CreateIn, created_by: str) -> str:
+        """Create and start one container — returns its short id.
+
+        Not part of the `Driver` protocol. Creating is Docker shaped: a Proxmox
+        VM and a systemd unit are not created from an image and a port map, and
+        pretending they share one signature would only make the next driver
+        lie about it.
+
+        Whether this name and this image are allowed at all is decided in
+        `service.container_create`. The driver is the last layer and does what
+        it is told, so nothing above it may hand it an unchecked specification.
+        """
+        try:
+            container_id = await asyncio.to_thread(_create, spec, created_by)
+        except ImageNotFound as error:
+            raise TargetConflict(
+                f"Image {spec.image} is not on the host. Pull it there first."
+            ) from error
+        except APIError as error:
+            # 409 is the name already being taken — the one case the caller can
+            # do something about, so it does not get flattened into a 503.
+            if error.status_code == 409:
+                raise TargetConflict(
+                    f"A container named {spec.name} already exists."
+                ) from error
+            log.warning("Docker create %r failed: %s", spec.name, error)
+            raise DriverUnavailable(str(error)) from error
+        except DockerException as error:
+            log.warning("Docker create %r failed: %s", spec.name, error)
+            raise DriverUnavailable(str(error)) from error
+        return container_id[:12]
+
+    async def state_of(self, container_id: str) -> State:
+        """State read back after an action — what happened, not what was asked.
+
+        A container that exits a second after `start` reads `exited` here, and
+        the UI shows that instead of an optimistic green dot.
+        """
+        try:
+            attrs = await asyncio.to_thread(_read_attrs, container_id)
+        except NotFound as error:
+            raise UnknownTarget(container_id) from error
+        except DockerException as error:
+            raise DriverUnavailable(str(error)) from error
+        return _state(attrs.get("State") or {})
 
     async def logs(self, container_id: str, lines: int) -> str:
         """Last lines of a container.

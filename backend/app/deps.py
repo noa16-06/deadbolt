@@ -6,7 +6,7 @@ import logging
 import secrets
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,28 @@ from app.security import COOKIE_NAME, hash_password, read_session
 log = logging.getLogger(__name__)
 
 DbSession = Annotated[AsyncSession, Depends(get_session)]
+
+
+def client_ip(request: Request) -> str:
+    """The address a request is attributed to — rate limit and audit log.
+
+    Behind a reverse proxy the socket always shows the proxy, so every visitor
+    would share one bucket and lock each other out. X-Forwarded-For fixes that
+    — but only when something in front actually overwrites the header. Without
+    a proxy anyone can set it themselves, which is why this is off by default
+    and belongs switched on together with Caddy.
+
+    Lives here rather than in the auth module because the server manager writes
+    the same value into its audit log, and two copies of this logic would drift
+    the moment one of them is fixed.
+    """
+    if settings.trust_proxy_header:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            # The last entry is the one the trusted proxy appended; earlier
+            # ones are whatever the client claimed.
+            return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
 
 
 async def _dev_user(session: AsyncSession) -> User:

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import ContainerList from "./ContainerList.jsx";
+import CreateContainer from "./CreateContainer.jsx";
 import Metrics from "./Metrics.jsx";
 import WebTerminal from "./WebTerminal.jsx";
 import { WRITE_ENABLED, serversApi } from "./serversApi.js";
@@ -95,6 +96,15 @@ export default function ServerManager({ onSessionLost }) {
     }
   }
 
+  async function createContainer(spec) {
+    const created = await serversApi.createContainer(spec);
+    // No optimistic row here: a fresh container has an id, an uptime and a
+    // state that only Docker knows. Re-reading is one request and shows what
+    // actually came up — including an image that exited on its own again.
+    await loadContainers();
+    return created;
+  }
+
   const running = containers.filter((c) => c.state === "running").length;
 
   return (
@@ -126,23 +136,27 @@ export default function ServerManager({ onSessionLost }) {
           </span>
         </div>
 
-        {!WRITE_ENABLED && tab === "containers" && (
+        {WRITE_ENABLED && tab === "containers" && (
           <div className="sv-note">
-            Containers, metrics and logs are live. Start, stop and restart are
-            not: the backend has no action endpoint yet on purpose. A restart
-            button reachable from the internet needs TOTP and the login rate
-            limit first — see <code>docs/security.md</code>.
+            Write access is on, and narrower than it looks: only containers on{" "}
+            <code>SERVERS_CONTROL_ALLOWLIST</code> can be started, stopped or
+            created, only images on <code>SERVERS_IMAGE_ALLOWLIST</code> can be
+            created from, and the account needs TOTP. Every attempt — refused
+            ones included — is written to the audit log.
           </div>
         )}
 
         {tab === "containers" && (
-          <ContainerList
-            containers={containers}
-            loading={loading}
-            error={error}
-            onAction={runAction}
-            onReload={loadContainers}
-          />
+          <>
+            <CreateContainer onCreate={createContainer} />
+            <ContainerList
+              containers={containers}
+              loading={loading}
+              error={error}
+              onAction={runAction}
+              onReload={loadContainers}
+            />
+          </>
         )}
         {tab === "metrics" && <Metrics data={metrics} loading={!metrics} />}
         {tab === "terminal" && <WebTerminal />}
