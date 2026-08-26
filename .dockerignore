@@ -1,0 +1,25 @@
+# Secrets never enter an image layer — configuration comes in through the
+# environment (docker-compose.yml), not through a copied .env.
+.env
+.env.local
+
+# The database belongs in a volume, not in the image.
+data/
+
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+frontend/node_modules/
+frontend/dist/
+
+docs/
+README.md

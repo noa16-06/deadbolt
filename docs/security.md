@@ -53,8 +53,11 @@ not a data leak, it is a host takeover. None of what follows is optional.
   addressed lives in the configuration. The client picks from a list of ids, it
   never names a host freely.
 - **Do not use the bare Docker socket.** Use a socket proxy with a restricted
-  endpoint set where possible. Otherwise any application bug is immediately
-  root. Creating needs `POST /containers/create` and `POST /containers/{id}/start`
+  endpoint set where possible. Done in `docker-compose.yml`: only the
+  `socket-proxy` container mounts the socket, the backend reaches it over a
+  network marked `internal: true`, and `POST: 0` there switches the write half
+  off at the proxy. Without one, any application bug is immediately root.
+  Creating needs `POST /containers/create` and `POST /containers/{id}/start`
   open on that proxy — leave them closed and the rest of the module still works,
   which is the cheapest way to switch the create half off entirely.
 - **Proxmox tokens and SSH keys are secrets at rest.** Not in the database in
@@ -68,7 +71,9 @@ not a data leak, it is a host takeover. None of what follows is optional.
 
 ## Operations
 
-- [ ] The backend runs as its own unprivileged user
+- [x] The backend runs as its own unprivileged user. In the compose setup
+      (`docker-compose.yml`) that is uid 1000 inside the container, with
+      `no-new-privileges` on every service.
 - [ ] Backups of `data/dashboard.db` — and a restore actually tested once.
       An untested backup is a hypothesis, not a backup.
 - [ ] Dependencies pinned by lockfile, scanned (`pip-audit`, `npm audit`) in CI

@@ -40,6 +40,8 @@ dashboard/
 │           └── servers/        ServerManager, ContainerList, Metrics,
 │                               WebTerminal — data still mocked
 ├── data/                       SQLite database — not in the repo
+├── docker/                     entrypoint for the backend image
+├── docker-compose.yml          backend + frontend + Docker socket proxy
 └── docs/security.md            what has to be true before this is public
 ```
 
@@ -70,6 +72,71 @@ npm run dev                      # -> http://localhost:5173
 Use the dashboard on **http://localhost:5173**, not on :8000 — Vite proxies
 `/api` to the backend, so the origin in the browser is identical and the
 session cookie works without CORS special cases.
+
+## Running in Docker
+
+For the homelab box. Local development stays as it is above — the compose setup
+is for the machine this actually runs on, and it needs Linux (`/proc` is
+bind-mounted, and there is no Docker socket to speak of on macOS).
+
+```bash
+cp .env.example .env       # SECRET_KEY, and AUTH_DISABLED=false
+docker compose up -d --build
+```
+
+Then **http://127.0.0.1:8080**, with Caddy in front of it.
+
+Three containers:
+
+| Service        | What it does                                          |
+| -------------- | ----------------------------------------------------- |
+| `frontend`     | nginx: serves the built bundle, proxies `/api`         |
+| `backend`      | FastAPI, migrates on start, runs as uid 1000           |
+| `socket-proxy` | the only container that sees `/var/run/docker.sock`    |
+
+Configuration comes from the same `.env` as the local start. Compose overrides
+only what has to differ inside a container, and each override is commented
+where it stands.
+
+### What is deliberately awkward
+
+**`AUTH_DISABLED=true` will not start.** Inside a container the backend has to
+bind `0.0.0.0`, and `app/config.py` refuses that combination. It is right to:
+`0.0.0.0` here means "reachable from the frontend container" — no port is
+published for the backend — but a login bypass on a Docker-controlling
+dashboard should cost an argument, not a shrug. Set it to `false`.
+
+**Only the frontend is published, and only on loopback**
+(`127.0.0.1:8080:8080`). Dropping the address would put the dashboard on the
+LAN, which is the one thing `docs/security.md` rules out.
+
+**The backend never sees the Docker socket.** It talks to
+`tecnativa/docker-socket-proxy` over a network marked `internal: true`, and
+that proxy answers a fixed set of paths. `POST: 0` is the default, so the whole
+write half — start, stop, restart, create — fails at the proxy before it
+reaches Docker. Reading is unaffected. Setting `POST: 1` is one line in
+`docker-compose.yml` and still not enough on its own: the name has to be on
+`SERVERS_CONTROL_ALLOWLIST`, the image on `SERVERS_IMAGE_ALLOWLIST`, and the
+account needs TOTP.
+
+**`DOCKER_UID` / `DOCKER_GID` have to match the owner of `./data`** (`id -u`,
+`id -g`). The database is a bind mount rather than a named volume because it is
+the thing that gets backed up, and a backup you have to `docker cp` out of a
+volume is a backup nobody takes.
+
+### What the metrics panel loses in a container
+
+`/proc` is mounted read-only and `PSUTIL_PROCFS_PATH` points at it, so CPU, RAM
+and network are the host's. Two things do not follow:
+
+- **No GPU.** `nvidia-smi` is not in the image. The driver handles its absence
+  and the panel hides the card.
+- **No CPU temperature.** It lives in `/sys/class/hwmon`, which
+  `PSUTIL_PROCFS_PATH` does not cover.
+
+Disks are read through the paths in `SERVERS_DISKS`, which are container paths:
+mount what you want shown and name it there.
+
 
 On first sign-in the backend creates a default weekly plan
 (`app/modules/planner/default_plan.py`).
@@ -148,7 +215,7 @@ is required or everyone shares one bucket.
 cd backend && python -m pytest
 ```
 
-42 of them, all running — no placeholders left. `tests/conftest.py` builds an
+80 of them, all running — no placeholders left. `tests/conftest.py` builds an
 in-memory database per test and two separately signed-in clients, which is what
 the planner authorization tests needed. Covered: can user A reach user B's data,
 does a password alone still get in once TOTP is on, does a recovery code work

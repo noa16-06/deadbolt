@@ -1,0 +1,158 @@
+# Homelab dashboard — three containers.
+#
+#   docker compose up -d --build
+#
+# Configuration comes from the .env in this directory, the same file the local
+# start reads. Only the values that HAVE to differ inside a container are
+# overridden below, and each one says why.
+#
+# Nothing is published except the frontend, and that only on 127.0.0.1: Caddy
+# terminates TLS in front of it (docs/security.md). `ports: 8080:8080` without
+# the address would put the dashboard on the LAN, which is the one thing that
+# baseline rules out.
+
+services:
+  # --------------------------------------------------------------------------
+  # Only this container sees /var/run/docker.sock, and it sees it read-only.
+  #
+  # docs/security.md: "Do not use the bare Docker socket." Whoever reaches the
+  # socket is root on the host, past every check the backend performs — so the
+  # backend gets an HTTP endpoint that answers a fixed, small set of paths and
+  # nothing else. Application bug and host takeover stop being the same event.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: dashboard-socket-proxy
+    restart: unless-stopped
+    environment:
+      # Everything the proxy does not list is refused. Reading containers is
+      # what the dashboard does by default: list, inspect, stats, logs.
+      CONTAINERS: 1
+      VERSION: 1
+
+      # The write half — start, stop, restart, create — is one flag away, and
+      # it is off. This is the cheapest switch the dashboard has: with POST=0
+      # the reading half works unchanged and every write fails at the proxy,
+      # before the request reaches Docker at all.
+      #
+      # Turning it on is deliberate, and it is not enough on its own: the
+      # container name still has to be on SERVERS_CONTROL_ALLOWLIST, the image
+      # on SERVERS_IMAGE_ALLOWLIST, and the account still needs TOTP.
+      POST: 0
+
+      # Spelled out rather than left to the default, because these are the ones
+      # that would hurt: EXEC is a shell in any container, and the other three
+      # hand over the host's images, volumes and networks.
+      EXEC: 0
+      IMAGES: 0
+      VOLUMES: 0
+      NETWORKS: 0
+      INFO: 0
+      AUTH: 0
+      SECRETS: 0
+      SERVICES: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      NODES: 0
+      PLUGINS: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      SESSION: 0
+      BUILD: 0
+      COMMIT: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      # No `ports:`. The proxy is reachable from the backend and from nowhere
+      # else, and `internal: true` on this network means it has no route out
+      # either.
+      - docker-api
+    security_opt:
+      - no-new-privileges:true
+
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      # The project root: app/config.py resolves PROJECT_ROOT two levels above
+      # itself, so backend/ has to sit inside /app the way it does in the repo.
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        # Must match the owner of ./data on the host — `id -u` / `id -g`.
+        UID: ${DOCKER_UID:-1000}
+        GID: ${DOCKER_GID:-1000}
+    container_name: dashboard-backend
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy
+    env_file:
+      - .env
+    environment:
+      # Inside the container 127.0.0.1 would mean "reachable by nothing", not
+      # "reachable by loopback only". The isolation the .env achieves with
+      # HOST=127.0.0.1 is achieved here by not publishing a port at all: the
+      # backend is reachable from the frontend container, full stop.
+      #
+      # NOTE: app/config.py refuses to start when AUTH_DISABLED=true meets a
+      # non-loopback HOST. That is on purpose and it applies here — set
+      # AUTH_DISABLED=false in .env before running this. A dashboard that
+      # controls Docker does not run without a login.
+      HOST: 0.0.0.0
+      PORT: 8000
+
+      # Not the host socket: the proxy above.
+      DOCKER_HOST: tcp://socket-proxy:2375
+
+      # nginx sets X-Forwarded-For and does not pass a client value through, so
+      # the login rate limit counts real addresses instead of putting everyone
+      # in one bucket (docs/security.md).
+      TRUST_PROXY_HEADER: "true"
+
+      # Absolute, because the entrypoint runs alembic from /app/backend while
+      # the app resolves the relative path against /app.
+      DATABASE_URL: sqlite+aiosqlite:////app/data/dashboard.db
+
+      # psutil reads the HOST's /proc through this, not the container's — the
+      # metrics panel is supposed to show the machine, not this container.
+      PSUTIL_PROCFS_PATH: /host/proc
+    volumes:
+      # The database lives on the host: it is what gets backed up.
+      - ./data:/app/data
+      - /proc:/host/proc:ro
+    networks:
+      - docker-api
+      - web
+    security_opt:
+      - no-new-privileges:true
+
+  # --------------------------------------------------------------------------
+  # Serves the built bundle and proxies /api to the backend, so the browser
+  # sees one origin and the session cookie needs no CORS exception.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dashboard-frontend
+    restart: unless-stopped
+    depends_on:
+      # The backend's healthcheck, not just its process: alembic runs before
+      # uvicorn, so "started" and "answering" are seconds apart, and starting
+      # the frontend in between only produces 502s.
+      backend:
+        condition: service_healthy
+    ports:
+      # Loopback only. Caddy is what the domain points at.
+      - "127.0.0.1:8080:8080"
+    networks:
+      - web
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  web:
+    driver: bridge
+  docker-api:
+    driver: bridge
+    # No route to the outside. The Docker API is the last thing that should be
+    # reachable from anywhere but the backend.
+    internal: true
