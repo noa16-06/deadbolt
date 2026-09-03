@@ -1,5 +1,7 @@
 # Homelab Dashboard
 
+[![CI](https://github.com/noa16-06/deadbolt/actions/workflows/ci.yml/badge.svg)](https://github.com/noa16-06/deadbolt/actions/workflows/ci.yml)
+
 Two tools under one roof, for a single-user homelab:
 
 1. **Productivity tool** — a weekly planner with time blocks and tasks
